@@ -1,3 +1,0 @@
-[profile localstack]
-region = us-east-1
-output = json

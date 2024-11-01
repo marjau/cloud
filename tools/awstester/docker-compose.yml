@@ -1,0 +1,126 @@
+services:
+
+  localstack:
+      image: localstack/localstack:latest
+      container_name: localstack-main
+      ports:
+        - "127.0.0.1:4566:4566"           # LocalStack Gateway
+        - "127.0.0.1:4510-4559:4510-4559" # External services port range
+      environment:
+        - SERVICES=secretsmanager,s3,sqs,lambda,sns,dynamodb,ses
+        - DEBUG=1
+        # TODO: Fix enable persistence
+        # - PERSISTENCE=1
+        # - SNAPSHOT_SAVE_STRATEGY=ON_SHUTDOWN
+        # - SNAPSHOT_LOAD_STRATEGY=ON_STARTUP
+      volumes:
+        - localstack-data:/var/lib/localstack
+        - "/var/run/docker.sock:/var/run/docker.sock"
+      restart: always
+
+# TODO: Create only one definition via .env file
+
+  go1.15-debian:
+      image: golang:1.15
+      container_name: awstester-1.15deb
+      environment:
+        - GO111MODULE=on
+        - AWS_PROFILE=localstack
+        - AWS_REGION=us-east-1
+        - AWS_ENDPOINT_URL=http://localstack-main:4566
+      volumes:
+        - .:/go/src/myapps/awstester
+        - ./aws_credentials:/root/.aws
+      working_dir: /go/src/myapps/awstester
+      entrypoint: ["bash"]
+      stdin_open: true 
+      tty: true 
+      restart: unless-stopped
+
+  go1.15-alpine:
+    image: golang:1.15-alpine3.13
+    container_name: awstester-1.15alp
+    environment:
+      - GO111MODULE=on
+      - AWS_PROFILE=localstack
+      - AWS_REGION=us-east-1
+      - AWS_ENDPOINT_URL=http://localstack-main:4566
+    volumes:
+      - .:/go/src/myapps/awstester
+      - ./aws_credentials:/root/.aws
+    working_dir: /go/src/myapps/awstester
+    entrypoint: ["ash"]
+    stdin_open: true 
+    tty: true 
+    restart: unless-stopped
+  
+  go1.16-debian:
+    image: golang:1.16
+    container_name: awstester-1.16deb
+    environment:
+      - GO111MODULE=on
+      - AWS_PROFILE=localstack
+      - AWS_REGION=us-east-1
+      - AWS_ENDPOINT_URL=http://localstack-main:4566
+    volumes:
+      - .:/go/src/myapps/awstester
+      - ./aws_credentials:/root/.aws
+    working_dir: /go/src/myapps/awstester
+    entrypoint: ["bash"]
+    stdin_open: true 
+    tty: true 
+    restart: unless-stopped
+
+  go1.16-alpine:
+    image: golang:1.16-alpine3.13
+    container_name: awstester-1.16alp
+    environment:
+      - GO111MODULE=on
+      - AWS_PROFILE=localstack
+      - AWS_REGION=us-east-1
+      - AWS_ENDPOINT_URL=http://localstack-main:4566
+    volumes:
+      - .:/go/src/myapps/awstester
+      - ./aws_credentials:/root/.aws
+    working_dir: /go/src/myapps/awstester
+    entrypoint: ["ash"]
+    stdin_open: true 
+    tty: true 
+    restart: unless-stopped
+  
+  go1.17-debian:
+    image: golang:1.17
+    container_name: awstester-1.17deb
+    environment:
+      - GO111MODULE=on
+      - AWS_PROFILE=localstack
+      - AWS_REGION=us-east-1
+      - AWS_ENDPOINT_URL=http://localstack-main:4566
+    volumes:
+      - .:/go/src/myapps/awstester
+      - ./aws_credentials:/root/.aws
+    working_dir: /go/src/myapps/awstester
+    entrypoint: ["bash"]
+    stdin_open: true 
+    tty: true 
+    restart: unless-stopped
+
+  go1.17-alpine:
+    image: golang:1.17-alpine3.13
+    container_name: awstester-1.17alp
+    environment:
+      - GO111MODULE=on
+      - AWS_PROFILE=localstack
+      - AWS_REGION=us-east-1
+      - AWS_ENDPOINT_URL=http://localstack-main:4566
+    volumes:
+      - .:/go/src/myapps/awstester
+      - ./aws_credentials:/root/.aws
+    working_dir: /go/src/myapps/awstester
+    entrypoint: ["ash"]
+    stdin_open: true 
+    tty: true 
+    restart: unless-stopped
+
+volumes:
+  localstack-data:

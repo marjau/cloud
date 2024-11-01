@@ -1,4 +1,4 @@
-module myapps/awstester-v2
+module myapps/awstester
 
 go 1.15
 
