@@ -1,4 +1,4 @@
-package main
+package service
 
 import (
 	"bytes"
@@ -6,6 +6,7 @@ import (
 	"errors"
 	"fmt"
 	"io/ioutil"
+	"myapps/awstester/internal/logger"
 
 	"github.com/aws/aws-sdk-go-v2/aws"
 	"github.com/aws/aws-sdk-go-v2/service/s3"
@@ -14,16 +15,16 @@ import (
 
 const s3SvcName = "S3"
 
-type s3Tester struct {
+type S3Tester struct {
 	awsTester
 	svc *s3.Client
 }
 
-func newS3Tester(cfg aws.Config) *s3Tester {
-	return &s3Tester{
+func NewS3Tester(cfg aws.Config) *S3Tester {
+	return &S3Tester{
 		awsTester: awsTester{
 			cfg:    cfg,
-			logger: newPrefixedLogger(s3SvcName),
+			logger: logger.NewPrefixedLogger(s3SvcName),
 		},
 		svc: s3.NewFromConfig(cfg, func(o *s3.Options) {
 			o.UsePathStyle = true // TODO: move to docker hosts approach
@@ -31,17 +32,20 @@ func newS3Tester(cfg aws.Config) *s3Tester {
 	}
 }
 
-func (st *s3Tester) RunTests() error {
-	st.logger.log("Start Testing...")
+func (st S3Tester) GetName() string {
+	return s3SvcName
+}
+
+func (st S3Tester) Run() error {
+	st.logger.Log("Start Testing...")
 	bucketName := "test-bucket"
 	objectKey := "test-file.txt"
 	fileContent := "Hello, this is a test file!"
+	defer st.clean(bucketName)
 
 	if err := st.createBucket(bucketName); err != nil {
 		return err
 	}
-	defer st.clean(bucketName)
-
 	if err := st.listBuckets(); err != nil {
 		return err
 	}
@@ -58,26 +62,26 @@ func (st *s3Tester) RunTests() error {
 		return err
 	}
 
-	st.logger.log("Testing Completed.")
+	st.logger.Log("Testing Completed.")
 	return nil
 }
 
-func (st *s3Tester) clean(bucketName string) {
-	st.logger.log("Start Cleaning Testing...")
+func (st S3Tester) clean(bucketName string) {
+	st.logger.Log("Start Cleaning Testing...")
 	if err := st.DeleteBucket(bucketName); err != nil {
 		var noSuchBucketErr *types.NoSuchBucket
 
 		if errors.As(err, &noSuchBucketErr) {
-			st.logger.logf("INFO: Bucket %v not found", bucketName)
+			st.logger.Logf("INFO: Bucket %v not found", bucketName)
 		} else {
-			st.logger.logf("ERROR: %v", err)
+			st.logger.Logf("ERROR: %v", err)
 		}
 	}
-	st.logger.log("Cleaning Testing Complete")
+	st.logger.Log("Cleaning Testing Complete")
 }
 
-func (st *s3Tester) createBucket(bucketName string) error {
-	st.logger.logf("Creating Bucket: %v", bucketName)
+func (st S3Tester) createBucket(bucketName string) error {
+	st.logger.Logf("Creating Bucket: %v", bucketName)
 
 	_, err := st.svc.CreateBucket(context.TODO(), &s3.CreateBucketInput{
 		Bucket: aws.String(bucketName),
@@ -86,27 +90,27 @@ func (st *s3Tester) createBucket(bucketName string) error {
 		return fmt.Errorf("failed to create bucket %v: %w", bucketName, err)
 	}
 
-	st.logger.log(fmt.Sprintf("Bucket %v created successfully", bucketName))
+	st.logger.Log(fmt.Sprintf("Bucket %v created successfully", bucketName))
 	return nil
 }
 
-func (st *s3Tester) listBuckets() error {
-	st.logger.log("Listing Buckets")
+func (st S3Tester) listBuckets() error {
+	st.logger.Log("Listing Buckets")
 
 	result, err := st.svc.ListBuckets(context.TODO(), &s3.ListBucketsInput{})
 	if err != nil {
 		return fmt.Errorf("failed to list buckets: %w", err)
 	}
 
-	st.logger.log("Buckets:")
+	st.logger.Log("Buckets:")
 	for i, bucket := range result.Buckets {
-		st.logger.logf("  %d. %s", i+1, aws.ToString(bucket.Name))
+		st.logger.Logf("  %d. %s", i+1, aws.ToString(bucket.Name))
 	}
 	return nil
 }
 
-func (st *s3Tester) UploadFile(bucketName, objectKey, content string) error {
-	st.logger.logf("Uploading File to Bucket: %v, Key: %v", bucketName, objectKey)
+func (st S3Tester) UploadFile(bucketName, objectKey, content string) error {
+	st.logger.Logf("Uploading File to Bucket: %v, Key: %v", bucketName, objectKey)
 
 	_, err := st.svc.PutObject(context.TODO(), &s3.PutObjectInput{
 		Bucket: aws.String(bucketName),
@@ -117,12 +121,12 @@ func (st *s3Tester) UploadFile(bucketName, objectKey, content string) error {
 		return fmt.Errorf("failed to upload file %v to bucket %v: %w", objectKey, bucketName, err)
 	}
 
-	st.logger.log("File uploaded successfully")
+	st.logger.Log("File uploaded successfully")
 	return nil
 }
 
-func (st *s3Tester) DownloadFile(bucketName, objectKey string) error {
-	st.logger.logf("Downloading File from Bucket: %v, Key: %v", bucketName, objectKey)
+func (st S3Tester) DownloadFile(bucketName, objectKey string) error {
+	st.logger.Logf("Downloading File from Bucket: %v, Key: %v", bucketName, objectKey)
 
 	result, err := st.svc.GetObject(context.TODO(), &s3.GetObjectInput{
 		Bucket: aws.String(bucketName),
@@ -138,12 +142,12 @@ func (st *s3Tester) DownloadFile(bucketName, objectKey string) error {
 		return fmt.Errorf("failed to read file content: %w", err)
 	}
 
-	st.logger.logf("Downloaded file content: %s", string(body))
+	st.logger.Logf("Downloaded file content: %s", string(body))
 	return nil
 }
 
-func (st *s3Tester) ListObjects(bucketName string) error {
-	st.logger.logf("Listing Objects in Bucket: %v", bucketName)
+func (st S3Tester) ListObjects(bucketName string) error {
+	st.logger.Logf("Listing Objects in Bucket: %v", bucketName)
 
 	result, err := st.svc.ListObjectsV2(context.TODO(), &s3.ListObjectsV2Input{
 		Bucket: aws.String(bucketName),
@@ -152,15 +156,15 @@ func (st *s3Tester) ListObjects(bucketName string) error {
 		return fmt.Errorf("failed to list objects in bucket %v: %w", bucketName, err)
 	}
 
-	st.logger.log("Objects:")
+	st.logger.Log("Objects:")
 	for i, item := range result.Contents {
-		st.logger.logf("\t%d. %s", i+1, aws.ToString(item.Key))
+		st.logger.Logf("\t%d. %s", i+1, aws.ToString(item.Key))
 	}
 	return nil
 }
 
-func (st *s3Tester) DeleteBucket(bucketName string) error {
-	st.logger.logf("Deleting Bucket: %v", bucketName)
+func (st S3Tester) DeleteBucket(bucketName string) error {
+	st.logger.Logf("Deleting Bucket: %v", bucketName)
 
 	// Delete all objects in the bucket before deleting the bucket
 	if err := st.deleteAllObjects(bucketName); err != nil {
@@ -174,12 +178,12 @@ func (st *s3Tester) DeleteBucket(bucketName string) error {
 		return fmt.Errorf("failed to delete bucket %v: %w", bucketName, err)
 	}
 
-	st.logger.log("Bucket deleted successfully")
+	st.logger.Log("Bucket deleted successfully")
 	return nil
 }
 
-func (st *s3Tester) deleteAllObjects(bucketName string) error {
-	st.logger.logf("Deleting all objects in Bucket: %v", bucketName)
+func (st S3Tester) deleteAllObjects(bucketName string) error {
+	st.logger.Logf("Deleting all objects in Bucket: %v", bucketName)
 
 	// List objects to delete
 	result, err := st.svc.ListObjectsV2(context.TODO(), &s3.ListObjectsV2Input{
@@ -197,7 +201,7 @@ func (st *s3Tester) deleteAllObjects(bucketName string) error {
 		if err != nil {
 			return fmt.Errorf("failed to delete object %v: %w", aws.ToString(item.Key), err)
 		}
-		st.logger.logf("Deleted object %v", aws.ToString(item.Key))
+		st.logger.Logf("Deleted object %v", aws.ToString(item.Key))
 	}
 	return nil
 }

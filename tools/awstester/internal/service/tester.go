@@ -1,15 +1,18 @@
-package main
+package service
 
 import (
+	"myapps/awstester/internal/logger"
+
 	"github.com/aws/aws-sdk-go-v2/aws"
 )
 
 type AWSTester interface {
-	RunTests() error
+	GetName() string
+	Run() error
 }
 
 type awsTester struct {
 	cfg    aws.Config
-	logger *prefixedLogger
+	logger *logger.PrefixedLogger
 	// t *testing.T
 }

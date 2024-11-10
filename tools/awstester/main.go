@@ -1,38 +1,47 @@
 package main
 
 import (
-	"log"
+	"myapps/awstester/internal/config"
+	"myapps/awstester/internal/logger"
+	svc "myapps/awstester/internal/service"
+	"myapps/awstester/internal/utils"
 )
 
-func main() {
-	log.Println("Starting testing AWS services...")
+const appName = "AWS-Tester"
 
-	cfg, err := newAWSConfig()
+func main() {
+	l := logger.NewPrefixedLogger(appName)
+	l.Log("Starting testing AWS services...")
+
+	cfg, err := config.NewAWSConfigWithEnpoint(
+		utils.GetEnv("AWS_REGION", config.AWS_REGION_DEFAULT),
+		utils.GetEnv("AWS_ENDPOINT_URL", config.AWS_ENDPOINT_URL_DEFAULT),
+	)
 	if err != nil {
-		log.Fatalf("Failed to load AWS configuration: %v", err)
+		l.Fatalf("Failed to load AWS configuration: %v", err)
 	}
 
-	// TODO: retrieve specific testers from environment variables
-	testers := []AWSTester{
-		newS3Tester(cfg),
-		newSQSTester(cfg),
-		newSNSTester(cfg),
-		newDynamoDBTester(cfg),
+	// TODO: retrieve specific awsTesters from environment variables
+	awsTesters := []svc.AWSTester{
+		svc.NewS3Tester(cfg),
+		svc.NewSQSTester(cfg),
+		svc.NewSNSTester(cfg),
+		svc.NewDynamoDBTester(cfg),
 	}
 
 	// TODO: apply concurrency
 	errs := make([]error, 0)
-	for _, tt := range testers {
-		if err := tt.RunTests(); err != nil {
+	for _, tester := range awsTesters {
+		if err := tester.Run(); err != nil {
 			errs = append(errs, err)
 		}
 	}
 
 	if len(errs) > 0 {
 		for i, e := range errs {
-			log.Printf("  %d. Failed running test: %s", i+1, e)
+			l.Logf("  %d. Failed running test: %s", i+1, e)
 		}
-		log.Fatalln("Errors occurred when running the AWS services tests.")
+		l.Fatalf("Errors occurred when running the AWS services tests.")
 	}
-	log.Println("All tests passed")
+	l.Log("All tests passed")
 }

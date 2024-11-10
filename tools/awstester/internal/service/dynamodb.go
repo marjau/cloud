@@ -1,9 +1,11 @@
-package main
+package service
 
 import (
 	"context"
 	"errors"
 	"fmt"
+
+	"myapps/awstester/internal/logger"
 
 	"github.com/aws/aws-sdk-go-v2/aws"
 	"github.com/aws/aws-sdk-go-v2/feature/dynamodb/attributevalue"
@@ -13,7 +15,7 @@ import (
 
 const dynamodbSvcName = "DynamoDB"
 
-type dynamoDBTester struct {
+type DynamoDBTester struct {
 	awsTester
 	svc *dynamodb.Client
 }
@@ -23,26 +25,29 @@ type Item struct {
 	Name string `json:"name"`
 }
 
-func newDynamoDBTester(cfg aws.Config) *dynamoDBTester {
-	return &dynamoDBTester{
+func NewDynamoDBTester(cfg aws.Config) *DynamoDBTester {
+	return &DynamoDBTester{
 		awsTester: awsTester{
 			cfg:    cfg,
-			logger: newPrefixedLogger(dynamodbSvcName),
+			logger: logger.NewPrefixedLogger(dynamodbSvcName),
 		},
 		svc: dynamodb.NewFromConfig(cfg),
 	}
 }
 
-func (dt *dynamoDBTester) RunTests() error {
-	dt.logger.log("Running Testing...")
+func (dt DynamoDBTester) GetName() string {
+	return dynamodbSvcName
+}
+
+func (dt DynamoDBTester) Run() error {
+	dt.logger.Log("Running Testing...")
 	tableName := "TestTable"
 	item := Item{ID: "123", Name: "Sample Item"}
+	defer dt.clean(tableName)
 
 	if err := dt.createTable(tableName); err != nil {
 		return err
 	}
-	defer dt.clean(tableName)
-
 	if err := dt.listTables(); err != nil {
 		return err
 	}
@@ -62,26 +67,26 @@ func (dt *dynamoDBTester) RunTests() error {
 		return err
 	}
 
-	dt.logger.log("Testing Completed")
+	dt.logger.Log("Testing Completed")
 	return nil
 }
 
-func (dt *dynamoDBTester) clean(tableName string) {
-	dt.logger.log("Start cleaning tests...")
+func (dt DynamoDBTester) clean(tableName string) {
+	dt.logger.Log("Start cleaning tests...")
 	if err := dt.deleteTable(tableName); err != nil {
 		var notFoundErr *types.ResourceNotFoundException
 
 		if errors.As(err, &notFoundErr) {
-			dt.logger.logf("INFO: Table %v not found", tableName)
+			dt.logger.Logf("INFO: Table %v not found", tableName)
 		} else {
-			dt.logger.logf("ERROR: %v", err)
+			dt.logger.Logf("ERROR: %v", err)
 		}
 	}
-	dt.logger.log("Tests cleaning completed.")
+	dt.logger.Log("Tests cleaning completed.")
 }
 
-func (dt *dynamoDBTester) createTable(tableName string) error {
-	dt.logger.logf("Creating %q Table", tableName)
+func (dt DynamoDBTester) createTable(tableName string) error {
+	dt.logger.Logf("Creating %q Table", tableName)
 
 	_, err := dt.svc.CreateTable(context.TODO(), &dynamodb.CreateTableInput{
 		TableName: aws.String(tableName),
@@ -103,12 +108,12 @@ func (dt *dynamoDBTester) createTable(tableName string) error {
 		return fmt.Errorf("failed to create table %v: %w", tableName, err)
 	}
 
-	dt.logger.logf("Table %q created successfully", tableName)
+	dt.logger.Logf("Table %q created successfully", tableName)
 	return nil
 }
 
-func (dt *dynamoDBTester) listTables() error {
-	dt.logger.log("Listing Tables")
+func (dt DynamoDBTester) listTables() error {
+	dt.logger.Log("Listing Tables")
 
 	result, err := dt.svc.ListTables(context.TODO(), &dynamodb.ListTablesInput{})
 	if err != nil {
@@ -116,19 +121,19 @@ func (dt *dynamoDBTester) listTables() error {
 	}
 
 	if len(result.TableNames) == 0 {
-		dt.logger.log("INFO: No tables found.")
+		dt.logger.Log("INFO: No tables found.")
 		return nil
 	}
 
-	dt.logger.log("Tables:")
+	dt.logger.Log("Tables:")
 	for i, tableName := range result.TableNames {
-		dt.logger.logf("  %d. %s", i+1, tableName)
+		dt.logger.Logf("  %d. %s", i+1, tableName)
 	}
 	return nil
 }
 
-func (dt *dynamoDBTester) putItem(tableName string, item Item) error {
-	dt.logger.logf("Putting Item %+v to %v Table", item, tableName)
+func (dt DynamoDBTester) putItem(tableName string, item Item) error {
+	dt.logger.Logf("Putting Item %+v to %v Table", item, tableName)
 
 	av, err := attributevalue.MarshalMap(item)
 	if err != nil {
@@ -143,12 +148,12 @@ func (dt *dynamoDBTester) putItem(tableName string, item Item) error {
 		return fmt.Errorf("failed to put item in table %v: %w", tableName, err)
 	}
 
-	dt.logger.log("Item put successfully")
+	dt.logger.Log("Item put successfully")
 	return nil
 }
 
-func (dt *dynamoDBTester) getItem(tableName, itemID string) error {
-	dt.logger.logf("Getting Item %v from Table: %v", itemID, tableName)
+func (dt DynamoDBTester) getItem(tableName, itemID string) error {
+	dt.logger.Logf("Getting Item %v from Table: %v", itemID, tableName)
 
 	result, err := dt.svc.GetItem(context.TODO(), &dynamodb.GetItemInput{
 		TableName: aws.String(tableName),
@@ -161,7 +166,7 @@ func (dt *dynamoDBTester) getItem(tableName, itemID string) error {
 	}
 
 	if result.Item == nil {
-		dt.logger.log("Item not found")
+		dt.logger.Log("Item not found")
 		return nil
 	}
 
@@ -171,12 +176,12 @@ func (dt *dynamoDBTester) getItem(tableName, itemID string) error {
 		return fmt.Errorf("failed to unmarshal item: %w", err)
 	}
 
-	dt.logger.log(fmt.Sprintf("Retrieved item: %+v", item))
+	dt.logger.Log(fmt.Sprintf("Retrieved item: %+v", item))
 	return nil
 }
 
-func (dt *dynamoDBTester) updateItem(tableName, itemID, newName string) error {
-	dt.logger.logf("Updating Item %v With New Name %q in Table: %v", itemID, newName, tableName)
+func (dt DynamoDBTester) updateItem(tableName, itemID, newName string) error {
+	dt.logger.Logf("Updating Item %v With New Name %q in Table: %v", itemID, newName, tableName)
 
 	_, err := dt.svc.UpdateItem(context.TODO(), &dynamodb.UpdateItemInput{
 		TableName: aws.String(tableName),
@@ -196,12 +201,12 @@ func (dt *dynamoDBTester) updateItem(tableName, itemID, newName string) error {
 		return fmt.Errorf("failed to update item in table %v: %w", tableName, err)
 	}
 
-	dt.logger.log("Item updated successfully")
+	dt.logger.Log("Item updated successfully")
 	return nil
 }
 
-func (dt *dynamoDBTester) deleteItem(tableName, itemID string) error {
-	dt.logger.logf("Deleting Item %v from Table: %v", itemID, tableName)
+func (dt DynamoDBTester) deleteItem(tableName, itemID string) error {
+	dt.logger.Logf("Deleting Item %v from Table: %v", itemID, tableName)
 
 	_, err := dt.svc.DeleteItem(context.TODO(), &dynamodb.DeleteItemInput{
 		TableName: aws.String(tableName),
@@ -213,12 +218,12 @@ func (dt *dynamoDBTester) deleteItem(tableName, itemID string) error {
 		return fmt.Errorf("failed to delete item from table %v: %w", tableName, err)
 	}
 
-	dt.logger.logf("Item %v deleted successfully", itemID)
+	dt.logger.Logf("Item %v deleted successfully", itemID)
 	return nil
 }
 
-func (dt *dynamoDBTester) deleteTable(tableName string) error {
-	dt.logger.logf("Deleting Table: %v", tableName)
+func (dt DynamoDBTester) deleteTable(tableName string) error {
+	dt.logger.Logf("Deleting Table: %v", tableName)
 
 	_, err := dt.svc.DeleteTable(context.TODO(), &dynamodb.DeleteTableInput{
 		TableName: aws.String(tableName),
@@ -227,6 +232,6 @@ func (dt *dynamoDBTester) deleteTable(tableName string) error {
 		return fmt.Errorf("failed to delete table %v: %w", tableName, err)
 	}
 
-	dt.logger.logf("Table %v deleted successfully", tableName)
+	dt.logger.Logf("Table %v deleted successfully", tableName)
 	return nil
 }

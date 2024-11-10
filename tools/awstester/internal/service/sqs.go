@@ -1,4 +1,4 @@
-package main
+package service
 
 // TODO: implement testing.T approach
 
@@ -7,30 +7,36 @@ import (
 	"fmt"
 	"strings"
 
+	"myapps/awstester/internal/logger"
+
 	"github.com/aws/aws-sdk-go-v2/aws"
 	"github.com/aws/aws-sdk-go-v2/service/sqs"
 )
 
 const sqsSvcName = "SQS"
 
-type sqsTester struct {
+type SqsTester struct {
 	awsTester
 	svc *sqs.Client
 }
 
-func newSQSTester(cfg aws.Config) *sqsTester {
+func NewSQSTester(cfg aws.Config) *SqsTester {
 	sqs.NewFromConfig(cfg)
-	return &sqsTester{
+	return &SqsTester{
 		awsTester: awsTester{
 			cfg:    cfg,
-			logger: newPrefixedLogger(sqsSvcName),
+			logger: logger.NewPrefixedLogger(sqsSvcName),
 		},
 		svc: sqs.NewFromConfig(cfg),
 	}
 }
 
-func (st sqsTester) RunTests() error {
-	st.logger.log("Start Testing...")
+func (st SqsTester) GetName() string {
+	return sqsSvcName
+}
+
+func (st SqsTester) Run() error {
+	st.logger.Log("Start Testing...")
 	queueName := "TestQueue"
 	message := "Hello, this is a test message!"
 
@@ -53,39 +59,39 @@ func (st sqsTester) RunTests() error {
 		return err
 	}
 
-	st.logger.log("Testing Completed.")
+	st.logger.Log("Testing Completed.")
 	return nil
 }
 
-func (st sqsTester) clean(queueURL string) {
-	st.logger.log("Start Cleaning Testing...")
+func (st SqsTester) clean(queueURL string) {
+	st.logger.Log("Start Cleaning Testing...")
 	if err := st.deleteQueue(queueURL); err != nil {
 		if strings.Contains(err.Error(), "AWS.SimpleQueueService.NonExistentQueue") {
-			st.logger.logf("INFO: Queue not found: %v", queueURL)
+			st.logger.Logf("INFO: Queue not found: %v", queueURL)
 		} else {
-			st.logger.logf("ERROR: %v", err)
+			st.logger.Logf("ERROR: %v", err)
 		}
 	}
-	st.logger.log("Cleaning Testing Completed")
+	st.logger.Log("Cleaning Testing Completed")
 }
 
-func (st sqsTester) listQueues() error {
-	st.logger.log("List Queues")
+func (st SqsTester) listQueues() error {
+	st.logger.Log("List Queues")
 
 	result, err := st.svc.ListQueues(context.TODO(), &sqs.ListQueuesInput{})
 	if err != nil {
 		return fmt.Errorf("failed to list queues: %w", err)
 	}
 
-	st.logger.log("Queues:")
+	st.logger.Log("Queues:")
 	for i, queueUrl := range result.QueueUrls {
-		st.logger.logf("  %d. %s", i+1, aws.ToString(&queueUrl))
+		st.logger.Logf("  %d. %s", i+1, aws.ToString(&queueUrl))
 	}
 	return nil
 }
 
-func (st *sqsTester) createQueue(queueName string) (string, error) {
-	st.logger.logf("Creating Queue: %v", queueName)
+func (st SqsTester) createQueue(queueName string) (string, error) {
+	st.logger.Logf("Creating Queue: %v", queueName)
 
 	result, err := st.svc.CreateQueue(context.TODO(), &sqs.CreateQueueInput{
 		QueueName: aws.String(queueName),
@@ -94,14 +100,14 @@ func (st *sqsTester) createQueue(queueName string) (string, error) {
 		return "", fmt.Errorf("failed to create %v queue: %w", queueName, err)
 	}
 
-	st.logger.logf("Queue %v created successfully: %s", queueName, aws.ToString(result.QueueUrl))
+	st.logger.Logf("Queue %v created successfully: %s", queueName, aws.ToString(result.QueueUrl))
 	return aws.ToString(result.QueueUrl), nil
 }
 
-func (st *sqsTester) sendMessage(queueURL, messageBody string) error {
-	st.logger.logf("Sending Message to Queue: %v", queueURL)
+func (st SqsTester) sendMessage(queueURL, messageBody string) error {
+	st.logger.Logf("Sending Message to Queue: %v", queueURL)
 
-	st.logger.logf("Sending message: %v", messageBody)
+	st.logger.Logf("Sending message: %v", messageBody)
 	_, err := st.svc.SendMessage(context.TODO(), &sqs.SendMessageInput{
 		QueueUrl:    aws.String(queueURL),
 		MessageBody: aws.String(messageBody),
@@ -110,12 +116,12 @@ func (st *sqsTester) sendMessage(queueURL, messageBody string) error {
 		return fmt.Errorf("failed to send message to queue %v: %w", queueURL, err)
 	}
 
-	st.logger.log("Message sent successfully")
+	st.logger.Log("Message sent successfully")
 	return nil
 }
 
-func (st *sqsTester) receiveMessages(queueURL string) error {
-	st.logger.logf("Receiving Messages from Queue: %v", queueURL)
+func (st SqsTester) receiveMessages(queueURL string) error {
+	st.logger.Logf("Receiving Messages from Queue: %v", queueURL)
 
 	result, err := st.svc.ReceiveMessage(context.TODO(), &sqs.ReceiveMessageInput{
 		QueueUrl:            aws.String(queueURL),
@@ -127,13 +133,13 @@ func (st *sqsTester) receiveMessages(queueURL string) error {
 	}
 
 	if len(result.Messages) == 0 {
-		st.logger.log("No messages received")
+		st.logger.Log("No messages received")
 		return nil
 	}
 
 	// Process and delete received messages
 	for _, message := range result.Messages {
-		st.logger.logf("Received message: %s", aws.ToString(message.Body))
+		st.logger.Logf("Received message: %s", aws.ToString(message.Body))
 		if err := st.deleteMessage(queueURL, aws.ToString(message.ReceiptHandle)); err != nil {
 			return err
 		}
@@ -141,8 +147,8 @@ func (st *sqsTester) receiveMessages(queueURL string) error {
 	return nil
 }
 
-func (st *sqsTester) deleteMessage(queueURL, receiptHandle string) error {
-	st.logger.logf("Deleting Message from Queue: %v", queueURL)
+func (st SqsTester) deleteMessage(queueURL, receiptHandle string) error {
+	st.logger.Logf("Deleting Message from Queue: %v", queueURL)
 
 	_, err := st.svc.DeleteMessage(context.TODO(), &sqs.DeleteMessageInput{
 		QueueUrl:      aws.String(queueURL),
@@ -152,12 +158,12 @@ func (st *sqsTester) deleteMessage(queueURL, receiptHandle string) error {
 		return fmt.Errorf("failed to delete message from queue %v: %w", queueURL, err)
 	}
 
-	st.logger.log("Message deleted successfully")
+	st.logger.Log("Message deleted successfully")
 	return nil
 }
 
-func (st *sqsTester) deleteQueue(queueURL string) error {
-	st.logger.logf("Deleting Queue: %v", queueURL)
+func (st SqsTester) deleteQueue(queueURL string) error {
+	st.logger.Logf("Deleting Queue: %v", queueURL)
 
 	_, err := st.svc.DeleteQueue(context.TODO(), &sqs.DeleteQueueInput{
 		QueueUrl: aws.String(queueURL),
@@ -166,6 +172,6 @@ func (st *sqsTester) deleteQueue(queueURL string) error {
 		return fmt.Errorf("failed to delete queue %v: %w", queueURL, err)
 	}
 
-	st.logger.log("Queue deleted successfully")
+	st.logger.Log("Queue deleted successfully")
 	return nil
 }
