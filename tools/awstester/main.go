@@ -27,6 +27,7 @@ func main() {
 		svc.NewSQSTester(cfg),
 		svc.NewSNSTester(cfg),
 		svc.NewDynamoDBTester(cfg),
+		svc.NewSecretsManagerTester(cfg),
 	}
 
 	// TODO: apply concurrency
